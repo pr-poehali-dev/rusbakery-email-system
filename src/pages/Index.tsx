@@ -62,7 +62,6 @@ const Index = () => {
 
   const [broadcastRecipients, setBroadcastRecipients] = useState<number[]>([]);
   const [broadcastMessage, setBroadcastMessage] = useState('');
-  const [unreadMessages, setUnreadMessages] = useState<Record<number, number>>({});
 
   const fetchUsers = async () => {
     try {
@@ -79,29 +78,6 @@ const Index = () => {
     try {
       const response = await fetch(`${API_URLS.messages}?userId=${currentUser.id}`);
       const data = await response.json();
-      
-      const previousMessageIds = new Set(messages.map((m: Message) => m.id));
-      const newMessages = data.filter((m: Message) => !previousMessageIds.has(m.id));
-      
-      newMessages.forEach((msg: Message) => {
-        if (msg.fromUserId !== currentUser.id) {
-          const senderUser = users.find((u: User) => u.id === msg.fromUserId);
-          const senderName = senderUser?.displayName || senderUser?.firstName || 'Неизвестный';
-          
-          if (selectedChat?.id !== msg.fromUserId) {
-            toast.info(`Новое сообщение от ${senderName}`, {
-              description: msg.content.substring(0, 50) + (msg.content.length > 50 ? '...' : ''),
-              duration: 4000,
-            });
-          }
-          
-          setUnreadMessages((prev: Record<number, number>) => ({
-            ...prev,
-            [msg.fromUserId]: (prev[msg.fromUserId] || 0) + 1
-          }));
-        }
-      });
-      
       setMessages(data);
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -121,15 +97,6 @@ const Index = () => {
 
     return () => clearInterval(interval);
   }, [currentUser]);
-
-  useEffect(() => {
-    if (selectedChat) {
-      setUnreadMessages((prev: Record<number, number>) => ({
-        ...prev,
-        [selectedChat.id]: 0
-      }));
-    }
-  }, [selectedChat]);
 
   const handleLogin = async () => {
     try {
@@ -601,45 +568,32 @@ const Index = () => {
 
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-1">
-            {otherUsers.map(user => {
-              const unreadCount = unreadMessages[user.id] || 0;
-              return (
-                <button
-                  key={user.id}
-                  onClick={() => setSelectedChat(user)}
-                  className={`w-full p-3 rounded-lg transition-all hover:bg-accent/50 ${
-                    selectedChat?.id === user.id ? 'bg-accent' : ''
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <Avatar className="w-10 h-10">
-                        <AvatarFallback className="bg-primary/20 text-primary">
-                          {user.firstName[0]}{user.lastName[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-card ${
-                        user.isOnline ? 'bg-green-500' : 'bg-gray-500'
-                      }`} />
-                      {unreadCount > 0 && (
-                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary rounded-full flex items-center justify-center">
-                          <span className="text-xs font-semibold text-primary-foreground">{unreadCount}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 text-left">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium text-sm">{user.displayName || user.firstName}</p>
-                        {unreadCount > 0 && (
-                          <div className="w-2 h-2 bg-primary rounded-full" />
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                    </div>
+            {otherUsers.map(user => (
+              <button
+                key={user.id}
+                onClick={() => setSelectedChat(user)}
+                className={`w-full p-3 rounded-lg transition-all hover:bg-accent/50 ${
+                  selectedChat?.id === user.id ? 'bg-accent' : ''
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Avatar className="w-10 h-10">
+                      <AvatarFallback className="bg-primary/20 text-primary">
+                        {user.firstName[0]}{user.lastName[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-card ${
+                      user.isOnline ? 'bg-green-500' : 'bg-gray-500'
+                    }`} />
                   </div>
-                </button>
-              );
-            })
+                  <div className="flex-1 text-left">
+                    <p className="font-medium text-sm">{user.displayName || user.firstName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                  </div>
+                </div>
+              </button>
+            ))}
           </div>
         </ScrollArea>
       </div>
