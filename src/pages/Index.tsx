@@ -52,6 +52,17 @@ const Index = () => {
       isOnline: true,
       lastSeen: new Date(),
     },
+    {
+      id: '2',
+      email: 'skzry@RusBakery',
+      password: '568876Qqq',
+      firstName: 'Администратор',
+      lastName: 'RusBakery',
+      displayName: 'Администратор',
+      role: 'owner',
+      isOnline: true,
+      lastSeen: new Date(),
+    },
   ]);
 
   const [messages, setMessages] = useState<Message[]>([]);
