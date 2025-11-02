@@ -115,6 +115,36 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
     
+    if method == 'DELETE':
+        params = event.get('queryStringParameters', {}) or {}
+        user_id = params.get('id')
+        
+        if not user_id:
+            cur.close()
+            conn.close()
+            return {
+                'statusCode': 400,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'User ID required'}),
+                'isBase64Encoded': False
+            }
+        
+        cur.execute("DELETE FROM message_recipients WHERE message_id IN (SELECT id FROM messages WHERE from_user_id = %s)", (user_id,))
+        cur.execute("DELETE FROM message_recipients WHERE to_user_id = %s", (user_id,))
+        cur.execute("DELETE FROM messages WHERE from_user_id = %s", (user_id,))
+        cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return {
+            'statusCode': 200,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'success': True}),
+            'isBase64Encoded': False
+        }
+    
     cur.close()
     conn.close()
     

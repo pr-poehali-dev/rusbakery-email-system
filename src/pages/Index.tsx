@@ -249,11 +249,40 @@ const Index = () => {
     }
   };
 
+  const handleDeleteUser = async (userId: number) => {
+    try {
+      const response = await fetch(`${API_URLS.users}?id=${userId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        toast.success('Пользователь удалён');
+        fetchUsers();
+        if (selectedChat?.id === userId) {
+          setSelectedChat(null);
+        }
+      } else {
+        toast.error('Ошибка удаления пользователя');
+      }
+    } catch (error) {
+      toast.error('Ошибка подключения к серверу');
+    }
+  };
+
   const getChatMessages = (userId: number) => {
     return messages.filter(m => 
       (m.fromUserId === currentUser?.id && m.to.includes(userId)) ||
       (m.fromUserId === userId && m.to.includes(currentUser?.id || 0))
     ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  };
+
+  const formatMoscowTime = (isoString: string) => {
+    const date = new Date(isoString);
+    return date.toLocaleTimeString('ru-RU', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      timeZone: 'Europe/Moscow'
+    });
   };
 
   if (!currentUser) {
@@ -512,6 +541,20 @@ const Index = () => {
                             <span className={`text-xs px-2 py-1 rounded ${user.role === 'owner' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
                               {user.role === 'owner' ? 'Владелец' : 'Работник'}
                             </span>
+                            {user.role !== 'owner' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => {
+                                  if (confirm(`Удалить сотрудника ${user.displayName || user.firstName}?`)) {
+                                    handleDeleteUser(user.id);
+                                  }
+                                }}
+                              >
+                                <Icon name="Trash2" size={16} className="text-destructive" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -568,7 +611,7 @@ const Index = () => {
                 <div>
                   <h3 className="font-semibold">{selectedChat.displayName || selectedChat.firstName} {selectedChat.lastName}</h3>
                   <p className="text-xs text-muted-foreground">
-                    {selectedChat.isOnline ? 'онлайн' : `был(а) в сети ${new Date(selectedChat.lastSeen).toLocaleTimeString()}`}
+                    {selectedChat.isOnline ? 'онлайн' : `был(а) в сети ${formatMoscowTime(selectedChat.lastSeen)}`}
                   </p>
                 </div>
               </div>
@@ -603,7 +646,7 @@ const Index = () => {
                           </div>
                         )}
                         <p className="text-xs opacity-70 mt-1">
-                          {new Date(msg.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                          {formatMoscowTime(msg.timestamp)}
                         </p>
                       </div>
                     </div>
