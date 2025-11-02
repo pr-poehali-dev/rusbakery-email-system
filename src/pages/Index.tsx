@@ -231,10 +231,6 @@ const Index = () => {
               Войти
             </Button>
           </div>
-
-          <div className="text-xs text-muted-foreground text-center">
-            Демо: owner@RusBakery / admin
-          </div>
         </Card>
       </div>
     );
