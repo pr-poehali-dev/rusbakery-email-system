@@ -35,6 +35,7 @@ interface Message {
   content: string;
   timestamp: string;
   isBroadcast: boolean;
+  attachments?: { name: string; url: string; size: number }[];
 }
 
 const Index = () => {
@@ -49,6 +50,8 @@ const Index = () => {
   const [showUserDialog, setShowUserDialog] = useState(false);
   const [showBroadcastDialog, setShowBroadcastDialog] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
+  const [showEmployeesDialog, setShowEmployeesDialog] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   
   const [newUserData, setNewUserData] = useState({
     firstName: '',
@@ -149,6 +152,21 @@ const Index = () => {
   const handleSendMessage = async () => {
     if (!messageText.trim() || !selectedChat || !currentUser) return;
 
+    const fileAttachments = await Promise.all(
+      attachedFiles.map(async (file) => {
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        return {
+          name: file.name,
+          size: file.size,
+          url: base64,
+        };
+      })
+    );
+
     try {
       const response = await fetch(API_URLS.messages, {
         method: 'POST',
@@ -158,11 +176,13 @@ const Index = () => {
           toUserIds: [selectedChat.id],
           content: messageText,
           isBroadcast: false,
+          attachments: fileAttachments.length > 0 ? fileAttachments : undefined,
         }),
       });
 
       if (response.ok) {
         setMessageText('');
+        setAttachedFiles([]);
         toast.success('Сообщение отправлено');
         fetchMessages();
       } else {
@@ -328,14 +348,27 @@ const Index = () => {
                     <div className={`w-3 h-3 rounded-full ${currentUser.isOnline ? 'bg-green-500' : 'bg-gray-500'}`} />
                     <span className="text-sm">{currentUser.isOnline ? 'Онлайн' : 'Не в сети'}</span>
                   </div>
+                  <Button 
+                    variant="destructive" 
+                    className="w-full mt-4"
+                    onClick={() => {
+                      setCurrentUser(null);
+                      setShowProfileDialog(false);
+                      toast.success('Вы вышли из системы');
+                    }}
+                  >
+                    <Icon name="LogOut" size={16} className="mr-2" />
+                    Выйти
+                  </Button>
                 </div>
               </DialogContent>
             </Dialog>
           </div>
 
           {currentUser.role === 'owner' && (
-            <div className="flex gap-2">
-              <Dialog open={showUserDialog} onOpenChange={setShowUserDialog}>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Dialog open={showUserDialog} onOpenChange={setShowUserDialog}>
                 <DialogTrigger asChild>
                   <Button className="flex-1" size="sm">
                     <Icon name="UserPlus" size={16} className="mr-2" />
@@ -441,6 +474,51 @@ const Index = () => {
                   </div>
                 </DialogContent>
               </Dialog>
+              </div>
+              
+              <Dialog open={showEmployeesDialog} onOpenChange={setShowEmployeesDialog}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-full">
+                    <Icon name="Users" size={16} className="mr-2" />
+                    Все сотрудники
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Список сотрудников ({users.length})</DialogTitle>
+                  </DialogHeader>
+                  <ScrollArea className="max-h-96">
+                    <div className="space-y-2">
+                      {users.map(user => (
+                        <div key={user.id} className="flex items-center justify-between p-3 border border-border rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="w-10 h-10">
+                              <AvatarFallback className="bg-primary/20 text-primary">
+                                {user.firstName[0]}{user.lastName[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium">{user.displayName || user.firstName} {user.lastName}</p>
+                              <p className="text-xs text-muted-foreground">{user.email}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-2 h-2 rounded-full ${user.isOnline ? 'bg-green-500' : 'bg-gray-500'}`} />
+                              <span className="text-xs text-muted-foreground">
+                                {user.isOnline ? 'Онлайн' : 'Офлайн'}
+                              </span>
+                            </div>
+                            <span className={`text-xs px-2 py-1 rounded ${user.role === 'owner' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                              {user.role === 'owner' ? 'Владелец' : 'Работник'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </DialogContent>
+              </Dialog>
             </div>
           )}
         </div>
@@ -508,6 +586,22 @@ const Index = () => {
                           : 'bg-muted text-foreground rounded-bl-sm'
                       }`}>
                         <p className="text-sm">{msg.content}</p>
+                        {msg.attachments && msg.attachments.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {msg.attachments.map((file, idx) => (
+                              <a
+                                key={idx}
+                                href={file.url}
+                                download={file.name}
+                                className="flex items-center gap-2 p-2 rounded bg-black/10 hover:bg-black/20 transition-colors"
+                              >
+                                <Icon name="File" size={14} />
+                                <span className="text-xs truncate">{file.name}</span>
+                                <span className="text-xs opacity-60">({(file.size / 1024).toFixed(1)} KB)</span>
+                              </a>
+                            ))}
+                          </div>
+                        )}
                         <p className="text-xs opacity-70 mt-1">
                           {new Date(msg.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                         </p>
@@ -518,15 +612,46 @@ const Index = () => {
               </div>
             </ScrollArea>
 
-            <div className="p-4 border-t border-border bg-card">
+            <div className="p-4 border-t border-border bg-card space-y-2">
+              {attachedFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {attachedFiles.map((file, idx) => (
+                    <div key={idx} className="flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-xs">
+                      <Icon name="File" size={12} />
+                      <span className="truncate max-w-[150px]">{file.name}</span>
+                      <button
+                        onClick={() => setAttachedFiles(prev => prev.filter((_, i) => i !== idx))}
+                        className="hover:text-destructive"
+                      >
+                        <Icon name="X" size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="flex gap-2">
-                <Button variant="outline" size="icon">
+                <input
+                  type="file"
+                  id="file-upload"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      setAttachedFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                    }
+                  }}
+                />
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                >
                   <Icon name="Paperclip" size={18} />
                 </Button>
                 <Input
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
                   placeholder="Написать сообщение..."
                   className="flex-1"
                 />

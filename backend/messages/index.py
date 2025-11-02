@@ -43,7 +43,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         cur.execute("""
             SELECT DISTINCT m.id, m.from_user_id, m.content, m.is_broadcast, m.created_at,
                    u.first_name, u.last_name, u.display_name,
-                   mr.to_user_id
+                   mr.to_user_id, m.attachments
             FROM messages m
             JOIN users u ON m.from_user_id = u.id
             JOIN message_recipients mr ON m.id = mr.message_id
@@ -64,7 +64,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'isBroadcast': msg[3],
                     'timestamp': msg[4].isoformat() if msg[4] else None,
                     'fromUserName': msg[7] or msg[5],
-                    'to': []
+                    'to': [],
+                    'attachments': msg[9] if msg[9] else None
                 }
             result[msg_id]['to'].append(msg[8])
         
@@ -84,6 +85,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         to_user_ids = body_data.get('toUserIds', [])
         content = body_data.get('content')
         is_broadcast = body_data.get('isBroadcast', False)
+        attachments = body_data.get('attachments')
         
         if not all([from_user_id, to_user_ids, content]):
             cur.close()
@@ -96,8 +98,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             }
         
         cur.execute(
-            "INSERT INTO messages (from_user_id, content, is_broadcast) VALUES (%s, %s, %s) RETURNING id",
-            (from_user_id, content, is_broadcast)
+            "INSERT INTO messages (from_user_id, content, is_broadcast, attachments) VALUES (%s, %s, %s, %s) RETURNING id",
+            (from_user_id, content, is_broadcast, json.dumps(attachments) if attachments else None)
         )
         message_id = cur.fetchone()[0]
         
