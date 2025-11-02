@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -12,26 +11,29 @@ import { Textarea } from '@/components/ui/textarea';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
 
+const API_URLS = {
+  auth: 'https://functions.poehali.dev/75fa0562-bd6a-44af-9e7c-81134f092025',
+  users: 'https://functions.poehali.dev/6d463c95-8038-4a7c-8166-78e386fff6ac',
+  messages: 'https://functions.poehali.dev/4629c767-0edf-4bbf-b04b-1768b3d856c1',
+};
+
 interface User {
-  id: string;
+  id: number;
   email: string;
-  password: string;
   firstName: string;
   lastName: string;
   displayName?: string;
   role: 'owner' | 'worker';
   isOnline: boolean;
-  lastSeen: Date;
+  lastSeen: string;
 }
 
 interface Message {
-  id: string;
-  from: string;
-  to: string[];
-  subject?: string;
+  id: number;
+  fromUserId: number;
+  to: number[];
   content: string;
-  timestamp: Date;
-  attachments?: File[];
+  timestamp: string;
   isBroadcast: boolean;
 }
 
@@ -40,31 +42,7 @@ const Index = () => {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: '1',
-      email: 'owner@RusBakery',
-      password: 'admin',
-      firstName: 'Владимир',
-      lastName: 'Петров',
-      displayName: 'Владимир',
-      role: 'owner',
-      isOnline: true,
-      lastSeen: new Date(),
-    },
-    {
-      id: '2',
-      email: 'skzry@RusBakery',
-      password: '568876Qqq',
-      firstName: 'Администратор',
-      lastName: 'RusBakery',
-      displayName: 'Администратор',
-      role: 'owner',
-      isOnline: true,
-      lastSeen: new Date(),
-    },
-  ]);
-
+  const [users, setUsers] = useState<User[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedChat, setSelectedChat] = useState<User | null>(null);
   const [messageText, setMessageText] = useState('');
@@ -79,84 +57,124 @@ const Index = () => {
     password: '',
   });
 
-  const [broadcastRecipients, setBroadcastRecipients] = useState<string[]>([]);
+  const [broadcastRecipients, setBroadcastRecipients] = useState<number[]>([]);
   const [broadcastMessage, setBroadcastMessage] = useState('');
+
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch(API_URLS.users);
+      const data = await response.json();
+      setUsers(data);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  const fetchMessages = async () => {
+    if (!currentUser) return;
+    try {
+      const response = await fetch(`${API_URLS.messages}?userId=${currentUser.id}`);
+      const data = await response.json();
+      setMessages(data);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    }
+  };
 
   useEffect(() => {
     if (!currentUser) return;
     
+    fetchUsers();
+    fetchMessages();
+    
     const interval = setInterval(() => {
-      setUsers(prev => prev.map(u => ({
-        ...u,
-        isOnline: Math.random() > 0.3,
-      })));
+      fetchUsers();
+      fetchMessages();
     }, 2000);
 
     return () => clearInterval(interval);
   }, [currentUser]);
 
-  const handleLogin = () => {
-    const user = users.find(u => u.email === loginEmail && u.password === loginPassword);
-    if (user) {
-      setCurrentUser(user);
-      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, isOnline: true } : u));
-      toast.success(`Добро пожаловать, ${user.displayName || user.firstName}!`);
-    } else {
-      toast.error('Неверный email или пароль');
+  const handleLogin = async () => {
+    try {
+      const response = await fetch(API_URLS.auth, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      });
+
+      if (response.ok) {
+        const user = await response.json();
+        setCurrentUser(user);
+        toast.success(`Добро пожаловать, ${user.displayName || user.firstName}!`);
+      } else {
+        toast.error('Неверный email или пароль');
+      }
+    } catch (error) {
+      toast.error('Ошибка подключения к серверу');
     }
   };
 
-  const handleCreateUser = () => {
+  const handleCreateUser = async () => {
     if (!newUserData.firstName || !newUserData.lastName || !newUserData.email || !newUserData.password) {
       toast.error('Заполните все поля');
       return;
     }
 
-    const newUser: User = {
-      id: Date.now().toString(),
-      email: newUserData.email + '@RusBakery',
-      password: newUserData.password,
-      firstName: newUserData.firstName,
-      lastName: newUserData.lastName,
-      displayName: newUserData.firstName,
-      role: 'worker',
-      isOnline: false,
-      lastSeen: new Date(),
-    };
+    try {
+      const response = await fetch(API_URLS.users, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: newUserData.email + '@RusBakery',
+          password: newUserData.password,
+          firstName: newUserData.firstName,
+          lastName: newUserData.lastName,
+        }),
+      });
 
-    setUsers(prev => [...prev, newUser]);
-    setNewUserData({ firstName: '', lastName: '', email: '', password: '' });
-    setShowUserDialog(false);
-    toast.success(`Пользователь ${newUser.email} создан`);
-  };
-
-  const handleDeleteUser = (userId: string) => {
-    setUsers(prev => prev.filter(u => u.id !== userId));
-    if (selectedChat?.id === userId) {
-      setSelectedChat(null);
+      if (response.ok) {
+        setNewUserData({ firstName: '', lastName: '', email: '', password: '' });
+        setShowUserDialog(false);
+        toast.success('Пользователь создан');
+        fetchUsers();
+      } else {
+        toast.error('Ошибка создания пользователя');
+      }
+    } catch (error) {
+      toast.error('Ошибка подключения к серверу');
     }
-    toast.success('Пользователь удалён');
   };
 
-  const handleSendMessage = () => {
-    if (!messageText.trim() || !selectedChat) return;
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !selectedChat || !currentUser) return;
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      from: currentUser!.id,
-      to: [selectedChat.id],
-      content: messageText,
-      timestamp: new Date(),
-      isBroadcast: false,
-    };
+    try {
+      const response = await fetch(API_URLS.messages, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fromUserId: currentUser.id,
+          toUserIds: [selectedChat.id],
+          content: messageText,
+          isBroadcast: false,
+        }),
+      });
 
-    setMessages(prev => [...prev, newMessage]);
-    setMessageText('');
-    toast.success('Сообщение отправлено');
+      if (response.ok) {
+        setMessageText('');
+        toast.success('Сообщение отправлено');
+        fetchMessages();
+      } else {
+        toast.error('Ошибка отправки сообщения');
+      }
+    } catch (error) {
+      toast.error('Ошибка подключения к серверу');
+    }
   };
 
-  const handleBroadcast = () => {
-    if (!broadcastMessage.trim()) {
+  const handleBroadcast = async () => {
+    if (!broadcastMessage.trim() || !currentUser) {
       toast.error('Введите текст сообщения');
       return;
     }
@@ -165,35 +183,57 @@ const Index = () => {
       ? broadcastRecipients 
       : users.filter(u => u.id !== currentUser?.id).map(u => u.id);
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      from: currentUser!.id,
-      to: recipients,
-      content: broadcastMessage,
-      timestamp: new Date(),
-      isBroadcast: true,
-    };
+    try {
+      const response = await fetch(API_URLS.messages, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fromUserId: currentUser.id,
+          toUserIds: recipients,
+          content: broadcastMessage,
+          isBroadcast: true,
+        }),
+      });
 
-    setMessages(prev => [...prev, newMessage]);
-    setBroadcastMessage('');
-    setBroadcastRecipients([]);
-    setShowBroadcastDialog(false);
-    toast.success(`Рассылка отправлена ${recipients.length} получателям`);
+      if (response.ok) {
+        setBroadcastMessage('');
+        setBroadcastRecipients([]);
+        setShowBroadcastDialog(false);
+        toast.success(`Рассылка отправлена ${recipients.length} получателям`);
+        fetchMessages();
+      } else {
+        toast.error('Ошибка отправки рассылки');
+      }
+    } catch (error) {
+      toast.error('Ошибка подключения к серверу');
+    }
   };
 
-  const handleUpdateProfile = (displayName: string) => {
+  const handleUpdateProfile = async (displayName: string) => {
     if (!currentUser) return;
     
-    setCurrentUser(prev => prev ? { ...prev, displayName } : null);
-    setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, displayName } : u));
-    toast.success('Профиль обновлён');
+    try {
+      const response = await fetch(API_URLS.users, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: currentUser.id, displayName }),
+      });
+
+      if (response.ok) {
+        setCurrentUser(prev => prev ? { ...prev, displayName } : null);
+        toast.success('Профиль обновлён');
+        fetchUsers();
+      }
+    } catch (error) {
+      toast.error('Ошибка обновления профиля');
+    }
   };
 
-  const getChatMessages = (userId: string) => {
+  const getChatMessages = (userId: number) => {
     return messages.filter(m => 
-      (m.from === currentUser?.id && m.to.includes(userId)) ||
-      (m.from === userId && m.to.includes(currentUser?.id || ''))
-    ).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      (m.fromUserId === currentUser?.id && m.to.includes(userId)) ||
+      (m.fromUserId === userId && m.to.includes(currentUser?.id || 0))
+    ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   };
 
   if (!currentUser) {
@@ -407,50 +447,32 @@ const Index = () => {
 
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-1">
-            {otherUsers.map(user => {
-              const unreadCount = getChatMessages(user.id).filter(m => m.from === user.id).length;
-              return (
-                <button
-                  key={user.id}
-                  onClick={() => setSelectedChat(user)}
-                  className={`w-full p-3 rounded-lg transition-all hover:bg-accent/50 ${
-                    selectedChat?.id === user.id ? 'bg-accent' : ''
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <Avatar className="w-10 h-10">
-                        <AvatarFallback className="bg-primary/20 text-primary">
-                          {user.firstName[0]}{user.lastName[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-card ${
-                        user.isOnline ? 'bg-green-500' : 'bg-gray-500'
-                      }`} />
-                    </div>
-                    <div className="flex-1 text-left">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium text-sm">{user.displayName || user.firstName}</p>
-                        {currentUser.role === 'owner' && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteUser(user.id);
-                            }}
-                          >
-                            <Icon name="Trash2" size={14} />
-                          </Button>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                    </div>
+            {otherUsers.map(user => (
+              <button
+                key={user.id}
+                onClick={() => setSelectedChat(user)}
+                className={`w-full p-3 rounded-lg transition-all hover:bg-accent/50 ${
+                  selectedChat?.id === user.id ? 'bg-accent' : ''
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Avatar className="w-10 h-10">
+                      <AvatarFallback className="bg-primary/20 text-primary">
+                        {user.firstName[0]}{user.lastName[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-card ${
+                      user.isOnline ? 'bg-green-500' : 'bg-gray-500'
+                    }`} />
                   </div>
-                </button>
-              );
-            })}
+                  <div className="flex-1 text-left">
+                    <p className="font-medium text-sm">{user.displayName || user.firstName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                  </div>
+                </div>
+              </button>
+            ))}
           </div>
         </ScrollArea>
       </div>
@@ -468,7 +490,7 @@ const Index = () => {
                 <div>
                   <h3 className="font-semibold">{selectedChat.displayName || selectedChat.firstName} {selectedChat.lastName}</h3>
                   <p className="text-xs text-muted-foreground">
-                    {selectedChat.isOnline ? 'онлайн' : `был(а) в сети ${selectedChat.lastSeen.toLocaleTimeString()}`}
+                    {selectedChat.isOnline ? 'онлайн' : `был(а) в сети ${new Date(selectedChat.lastSeen).toLocaleTimeString()}`}
                   </p>
                 </div>
               </div>
@@ -477,7 +499,7 @@ const Index = () => {
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-4">
                 {getChatMessages(selectedChat.id).map(msg => {
-                  const isOwn = msg.from === currentUser.id;
+                  const isOwn = msg.fromUserId === currentUser.id;
                   return (
                     <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[70%] p-3 rounded-2xl ${
@@ -487,7 +509,7 @@ const Index = () => {
                       }`}>
                         <p className="text-sm">{msg.content}</p>
                         <p className="text-xs opacity-70 mt-1">
-                          {msg.timestamp.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(msg.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
                     </div>

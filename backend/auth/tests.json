@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "name": "Login with valid credentials",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "email": "skzry@RusBakery",
+        "password": "568876Qqq"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "id": "number",
+        "email": "string",
+        "role": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
